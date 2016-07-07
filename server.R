@@ -1,16 +1,19 @@
 library(plotly)
 require(ggplot2)
 library(shinythemes)
+library(gridExtra)
+
+options(encoding = 'UTF-8')
 
 
-shinyServer(function(input, output){
+shinyServer(function(input, output, session){
   
-  output$tex1 <- renderText({ 
-    "O Teorema Central do Limite diz que..."
+  
+  output$tex <- renderUI({
+    withMathJax(sprintf("O Teorema Central do Limite fornece um importante resultado. Seja  $$X_1, ..., X_n$$ uma amostra aleatória de tamanho n de uma população com média e variância $$\\mu ,\\sigma^{2}$$ respectivamente. Então, à medida que n cresce, a distribuição das médias é aproximadamente $$N(\\mu,\\frac{\\sigma}{\\sqrt{n}})$$."))
   })
   
-  
-  output$med = renderUI({
+   output$med = renderUI({
     if (input$dist == "rnorm"){sliderInput("med", "Média", min = -50, max = 50, value = 0)}
   })
   output$dp = renderUI({
@@ -23,137 +26,145 @@ shinyServer(function(input, output){
     if (input$dist == "runif"){sliderInput("max", "Maximo", value = 2, min = 0, max = 20)}
   })
   
+  output$lamb = renderUI({
+    if (input$dist == "rexp"){sliderInput("lamb", "Lambda", value = 1, min = 0, max = 30)}
+  })
+
  
-  f1 <- function(dist, n, med, dp, min, max){
-    
-    val <- NULL
-    
-    if(dist == "rnorm"){
-      med <- input$med 
-      dp <- input$dp
-      n <- input$n
-      val <- rnorm(n, med, dp)
-    } else if(dist == "runif"){
-      min <- input$min
-      max <- input$max
-      n <- input$n
-      val <- runif(n, min, max) 
-    }
-    return(val)
-  } # Fim da função 1
+  
+  # GrÃ¡fico 1
   
   
-  rep_f1 <- repeatable(f1)
-  
-  pri <- reactive({
-    n <- input$n
-    return(rep_f1(input$dist, n, input$med, input$dp, input$min, input$max))
-  }) 
-  
-  
-  
-  
-  amostra <- reactive({
-    Dis <- pri()
-    N <- input$N
-    n <- input$n
-    return(replicate(N, sample(Dis, n, replace = T)))
-  }) 
-  
-  
-  # Gráfico 1
   
   output$plot1 <- renderPlotly({
-    nome_dist <- switch (input$dist,
-                         rnorm = "Distribuição Normal",
-                         runif = "Distribuição Uniforme"
-    )
     
-    Dis <- pri()
-    mDist <- mean(Dis)
-    dpDist <- sd(Dis)
     
-    Mi <- NULL
-    Ma <- NULL
-    erro <- F
+    if (input$dist == "rnorm"){
+      val <- rnorm(input$n*input$N, input$med, input$dp)
+    } else if (input$dist == "runif"){
+      val <- runif(input$n*input$N, input$min, input$max)
+    } else if (input$dist == "rexp"){
+      val <- rexp(input$n*input$N, input$lamb)
+    } 
     
-    if(input$dist == "runif"){
-      Mi <- input$min
-      Ma <- input$max
-      if(Mi > Ma){
-        erro <- T
-      }
-    }
+    nome_dist <- switch(input$dist,
+                        rexp = "Distribuição Exponencial", 
+                        rnorm = "Distribuição Normal", 
+                        runif = "Distribuição Uniforme") 
     
-    if(erro){
-      
-      plot(0,0,type = 'n', xlab = " ", ylab = " ")
-      text(0,0,"ERRO : O limite inferior é maior que o superior.", col = "red")
-      
-    } else {
-      
-      Df <- data.frame(x = Dis)
-      library(plotly)
-      g <- ggplot(Df, aes(x = x)) +
-        geom_histogram(aes(y = ..density..), binwidth = density(Df$x)$bw)+
-        geom_density(fill = "red", alpha = 0.2) +
-        xlab(" ") + ylab(" ") + 
-        ggtitle(" ")
-      p <-  ggplotly(g) ; p
-      
-    }
+   
+    Df <- data.frame(x = val)
+    library(plotly)
+    g <- ggplot(Df, aes(x = x)) +
+      geom_histogram(aes(y = ..density..))+
+      geom_density(fill = "red", alpha = 0.2) +
+      xlab("x") + ylab(" ") +
+      ggtitle(nome_dist)
+    p <-  ggplotly(g) ; p
     
-  }) # Fim do gráfico 1  
+  })
   
   
-  # Gráfico 2
+  
+  # GrÃ¡fico 2
   
   output$plot2 <- renderPlotly({
     
-    Mi <- NULL
-    Ma <- NULL
-    erro <- F
     
-    if(input$dist == "Uniforme"){
-      Mi <- input$min
-      Ma <- input$max
-      if(Mi > Ma){
-        erro <- T
-      }
-    }
+    if (input$dist == "rnorm"){
+      val <- rnorm(input$n*input$N, input$med, input$dp)
+    } else if (input$dist == "runif"){
+      val <- runif(input$n*input$N, input$min, input$max)
+    } else if (input$dist == "rexp"){
+      val <- rexp(input$n*input$N, input$lamb)
+    } 
     
-    if(erro) 
-      return
-    else{
-      
-      nome_dist <- switch(input$dist,
-                          rnorm = "Distribuição Normal",
-                          runif = "Distribuição Uniforme")
-      N <- input$N
-      n <- input$n
-     
-      Dis <- pri()
-      mDist <- mean(Dis)
-      dpDist <- sd(Dis)
-      medis <- colMeans(amostra())
-      
-      med_amost <- mean(medis)
-      dp_amost <- sd(medis)
-      
-      Df2 <- data.frame(x = medis)
-      library(plotly)
-      ggplot(Df2, aes(x = x)) +
-        geom_histogram(aes(y = ..density..), binwidth = density(Df2$x)$bw)+
-        geom_density(fill = "red", alpha = 0.2) +
-        xlab(" ") + ylab(" ") +
-        ggtitle(" ")
-      ggplotly()
-      
-    }
+  
+    nome_dist <- switch(input$dist,
+                        rexp = "Distribuição Exponencial", 
+                        rnorm = "Distribuição Normal", 
+                        runif = "Distribuição Uniforme") 
+    
+    n <- input$n
+    N <- input$N
+    amost <- matrix(val, n,N)
+    
+    med_amostral <- colMeans(amost)
+    Df2 <- data.frame(x = med_amostral)
+    library(plotly)
+    ggplot(Df2, aes(x = x)) +
+      geom_histogram(aes(y = ..density..))+
+      geom_density(fill = "red", alpha = 0.2) +
+      xlab("Médias amostrais") + ylab(" ") +
+      ggtitle(paste("Distribuição das médias de",N, 
+                    "amostras aleatórias de tamanho", n, 
+                    "de uma", nome_dist))
+    ggplotly()
     
     
-  }) # Fim do gráfico 2
+      }) # Fim do grÃ¡fico 2
+  
+ 
+  output$tab <- renderTable({
+    if (input$dist == "rnorm"){
+      val <- rnorm(input$n*input$N, input$med, input$dp)
+    } else if (input$dist == "runif"){
+      val <- runif(input$n*input$N, input$min, input$max)
+    } else if (input$dist == "rexp"){
+      val <- rexp(input$n*input$N, input$lamb)
+    } 
+    
+    n <- input$n
+    N <- input$N
+    amost <- matrix(val, n,N)
+    Médias <- apply(amost, 2, mean)
+    DP <- apply(amost, 2, sd)
+    Medianas <- apply(amost, 2, median)
+    tabela <- data.frame(Médias, DP, Medianas)
+    tabela
+    }) # Fim da tabela
+  
+  output$tex2 <- renderText({
+    paste("A tabela  apresenta as médias, desvios-padrão e medianas das", input$N,"amostras.")
+  })
   
   
+  output$plot3 <- renderPlotly({
+    
+    
+    if (input$dist == "rnorm"){
+      val <- rnorm(input$n*input$N, input$med, input$dp)
+    } else if (input$dist == "runif"){
+      val <- runif(input$n*input$N, input$min, input$max)
+    } else if (input$dist == "rexp"){
+      val <- rexp(input$n*input$N, input$lamb)
+    } 
+    
+    
+    nome_dist <- switch(input$dist,
+                        rexp = "Distribuição Exponencial", 
+                        rnorm = "Distribuição Normal", 
+                        runif = "Distribuição Uniforme") 
+    
+    n <- input$n
+    N <- input$N
+    amost <- matrix(val, n,N)
+    
+    mediana_amostral <- apply(amost, 2, median)
+    
+    Df2 <- data.frame(x = mediana_amostral)
+    library(plotly)
+    ggplot(Df2, aes(x = x)) +
+      geom_histogram(aes(y = ..density..))+
+      geom_density(fill = "red", alpha = 0.2) +
+      xlab("Medianas amostrais") + ylab(" ") +
+      ggtitle(paste("Distribuição das medianas de",N,
+                    "amostras aleatórias de tamanho", n, 
+                    "de uma", nome_dist, sep = " "))
+    ggplotly()
+    
+    
+  })
   
-}) # Fim da seção
+  
+}) # Fim da seÃ§Ã£o
